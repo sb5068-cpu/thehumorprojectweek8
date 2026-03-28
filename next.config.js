@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -6,6 +7,9 @@ const nextConfig = {
       { protocol: 'https', hostname: '*.googleusercontent.com' },
       { protocol: 'https', hostname: '*.almostcrackd.ai' },
     ],
+  },
+  experimental: {
+    serverComponentsExternalPackages: ['@supabase/ssr'],
   },
 }
 module.exports = nextConfig
