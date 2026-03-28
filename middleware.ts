@@ -2,35 +2,25 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-
-  // 1. SAFETY: Skip middleware for static files and the login page itself
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.includes('/api/auth') ||
-    pathname === '/login' ||
-    pathname === '/favicon.ico'
-  ) {
-    return NextResponse.next()
-  }
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+  // Safety: If keys are missing, just let the request through so the page can show an error
   if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.next()
+    return response
   }
-
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  })
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll()
       },
-      // ADDED EXPLICIT TYPES HERE TO SATISFY THE COMPILER
       setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         response = NextResponse.next({ request })
@@ -41,9 +31,18 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  // IMPORTANT: Use getUser() for security and to refresh the session
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user && pathname !== '/login') {
+  const { pathname } = request.nextUrl
+
+  // 1. Allow login and auth-callback pages to load without redirection
+  if (pathname === '/login' || pathname.startsWith('/auth')) {
+    return response
+  }
+
+  // 2. Redirect to login if no user is found
+  if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -51,5 +50,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Match all request paths except for the ones starting with:
+  // - _next/static (static files)
+  // - _next/image (image optimization files)
+  // - favicon.ico (favicon file)
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
