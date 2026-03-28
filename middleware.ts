@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
@@ -14,13 +14,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // 2. Check if Environment Variables exist
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error("Missing Supabase Environment Variables")
-    return NextResponse.next() // Let it through so the page can show an error instead of a 500 crash
+    return NextResponse.next()
   }
 
   let response = NextResponse.next({
@@ -29,8 +27,11 @@ export async function middleware(request: NextRequest) {
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
-      getAll() { return request.cookies.getAll() },
-      setAll(cookiesToSet) {
+      getAll() {
+        return request.cookies.getAll()
+      },
+      // ADDED EXPLICIT TYPES HERE TO SATISFY THE COMPILER
+      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         response = NextResponse.next({ request })
         cookiesToSet.forEach(({ name, value, options }) =>
@@ -40,11 +41,9 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // 3. Get User
   const { data: { user } } = await supabase.auth.getUser()
 
-  // 4. Redirect if not logged in
-  if (!user) {
+  if (!user && pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
